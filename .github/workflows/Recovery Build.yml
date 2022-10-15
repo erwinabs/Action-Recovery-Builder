@@ -128,7 +128,6 @@ jobs:
         source build/envsetup.sh
         lunch ${{ github.event.inputs.MAKEFILE_NAME }}-eng
         export ALLOW_MISSING_DEPENDENCIES=true
-        make clean
         make ${{ github.event.inputs.BUILD_TARGET }}image -j$(nproc --all)        
       
     - name: Upload to Release
