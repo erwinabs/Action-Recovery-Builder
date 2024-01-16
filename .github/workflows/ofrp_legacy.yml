@@ -79,7 +79,7 @@ jobs:
       run: |
         cd ${{ steps.pwd.outputs.workspace-folder }}
         git clone ${{ github.event.inputs.SYNC_URL }}
-        cd sync && legacy 
+        cd sync && cd legacy 
         ./orangefox_sync_legacy.sh --branch ${{ github.event.inputs.MANIFEST_BRANCH }} --path ${{ steps.pwd.outputs.workspace-folder }}/fox_${{ github.event.inputs.MANIFEST_BRANCH }}
       working-directory: ${{ steps.pwd.outputs.workspace-folder }}
 
