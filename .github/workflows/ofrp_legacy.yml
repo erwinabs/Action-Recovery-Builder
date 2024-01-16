@@ -14,15 +14,15 @@ on:
       DEVICE_TREE_URL:
         description: 'DEVICE_TREE_URL'
         required: true
-        default: ''
+        default: 'https://github.com/erwinabs/twrp_realme_RMX2103'
       DEVICE_TREE_BRANCH:
         description: 'DEVICE_TREE_BRANCH'
         required: true
-        default: ''
+        default: 'android-10'
       DEVICE_PATH:
         description: 'DEVICE_PATH'
         required: true
-        default: 'device/'
+        default: 'device/realme/RMX2103'
       COMMON_TREE_URL:
         description: 'COMMON_TREE_URL (if no common tree, leave blank)'
         required: false
@@ -36,7 +36,7 @@ on:
       MAKEFILE_NAME:
         description: 'MAKEFILE_NAME'
         required: true
-        default: 'omni'
+        default: 'omni_RMX2103'
       BUILD_TARGET:
         description: 'BUILD_TARGET'
         required: true
@@ -81,7 +81,7 @@ jobs:
         git clone https://gitlab.com/OrangeFox/sync.git
         cd sync
         cd legacy
-        bash orangefox_sync_legacy.sh --branch 10.0 --path ~/fox_10.0
+        bash orangefox_sync_legacy.sh --branch 10.0 --path ~/${{ steps.pwd.outputs.workspace-folder }}/fox_10.0
       working-directory: ${{ steps.pwd.outputs.workspace-folder }}
 
     - name: Clone device tree
