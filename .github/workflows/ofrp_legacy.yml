@@ -79,7 +79,7 @@ jobs:
       run: |
         cd ${{ steps.pwd.outputs.workspace-folder }}
         git clone https://gitlab.com/OrangeFox/sync.git
-        cd sync && cd legacy && ./orangefox_sync_legacy.sh --branch 10.0 --path ~/OrangeFox_10 --ssh 1
+        cd sync && cd legacy && bash orangefox_sync_legacy.sh --branch 10.0 --path ~/Fox_10 
       working-directory: ${{ steps.pwd.outputs.workspace-folder }}
 
     - name: Clone device tree
