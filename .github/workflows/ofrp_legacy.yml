@@ -13,11 +13,11 @@ on:
         default: '10.0'
       DEVICE_TREE_URL:
         description: 'DEVICE_TREE_URL'
-        required: true
+        required: false
         default: 'https://github.com/erwinabs/twrp_realme_RMX2103'
       DEVICE_TREE_BRANCH:
         description: 'DEVICE_TREE_BRANCH'
-        required: true
+        required: false
         default: 'android-10'
       DEVICE_PATH:
         description: 'DEVICE_PATH'
@@ -32,7 +32,7 @@ on:
       DEVICE_NAME:
         description: 'DEVICE_NAME'
         required: true
-        default: ''
+        default: 'RMX2103'
       MAKEFILE_NAME:
         description: 'MAKEFILE_NAME'
         required: true
@@ -86,8 +86,8 @@ jobs:
 
     - name: Clone device tree
       run: |
-        cd ${{ steps.pwd.outputs.workspace-folder }}/fox_10.0
-        git clone ${{ github.event.inputs.DEVICE_TREE_URL }} -b ${{ github.event.inputs.DEVICE_TREE_BRANCH }} ./${{ github.event.inputs.DEVICE_PATH }}
+        cd ~/${{ steps.pwd.outputs.workspace-folder }}/fox_10.0
+        git clone https://github.com/erwinabs/twrp_realme_RMX2103.git device/realme/RMX2103
       working-directory: ${{ steps.pwd.outputs.workspace-folder }}
 
     - name: Set Swap Space
@@ -97,7 +97,7 @@ jobs:
 
     - name: Building recovery
       run: |
-        cd ${{ steps.pwd.outputs.workspace-folder }}/fox_${{ github.event.inputs.MANIFEST_BRANCH }}
+        cd ${{ steps.pwd.outputs.workspace-folder }}/fox_10.0
         set +e
         source build/envsetup.sh
         export ALLOW_MISSING_DEPENDENCIES=true
