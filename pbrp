@@ -1,0 +1,25 @@
+# A Function to Send Posts to Telegram
+telegram_message() {
+	curl -s -X POST "https://api.telegram.org/bot${TG_TOKEN}/sendMessage" \
+	-d chat_id="${TG_CHAT_ID}" \
+	-d parse_mode="HTML" \
+	-d text="$1"
+}
+
+# Send the Telegram Message
+
+echo -e \
+"
+PitchBlack Recovery CI
+
+✔️ The Build has been Triggered!
+
+📱 Device: "${DEVICE}"
+🖥 Build System: "${BRANCH}"
+🌲 Logs: <a href=\"https://github.com/erwinabs/Action-Recovery-Builder/actions}\">Here</a>
+" > tg.html
+
+TG_TEXT=$(< tg.html)
+
+telegram_message "${TG_TEXT}"
+echo " "
