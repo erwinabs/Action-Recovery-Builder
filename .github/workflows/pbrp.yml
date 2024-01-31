@@ -9,8 +9,8 @@ name: PBRP - Build
 on:
   workflow_dispatch:
     inputs:
-          MANIFEST_URL:
-        description: 'MANIFEST_URL (if using SSH keys, use git@github.com:repo URL format)'
+      MANIFEST_URL:
+        description: 'PBRP Manifest'
         required: true
         default: 'https://github.com/PitchBlackRecoveryProject/manifest_pb'
       MANIFEST_BRANCH:
