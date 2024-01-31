@@ -9,11 +9,18 @@ name: PBRP - Build
 on:
   workflow_dispatch:
     inputs:
+          MANIFEST_URL:
+        description: 'MANIFEST_URL (if using SSH keys, use git@github.com:repo URL format)'
+        required: true
+        default: 'https://github.com/PitchBlackRecoveryProject/manifest_pb'
       MANIFEST_BRANCH:
         description: 'PBRP Manifest Branch'
         required: true
         default: 'android-12.1'
         type: choice
+        options:
+        - android-11.0
+        - android-12.1
       DEVICE_TREE:
         description: 'PBRP Device Tree'
         required: true
@@ -69,8 +76,7 @@ jobs:
         cd scripts
         sudo bash setup/android_build_env.sh
       
-    - name: Set-up Manifest
-      if: github.event.inputs.MANIFEST_BRANCH == 'android-11.0' || github.event.inputs.MANIFEST_BRANCH == 'android-12.1'
+    - name: Set-up Manifest'
       run: |
         mkdir -p ${GITHUB_WORKSPACE}/pbrp
         cd ${GITHUB_WORKSPACE}/pbrp
