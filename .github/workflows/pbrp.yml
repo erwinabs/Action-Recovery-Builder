@@ -78,42 +78,54 @@ jobs:
       
     - name: Set-up Manifest'
       run: |
-        mkdir ${GITHUB_WORKSPACE}/pbrp
-        cd ${GITHUB_WORKSPACE}/pbrp
+        mkdir workspace
+        cd workspace
+        echo "workspace-folder=$(pwd)" >> $GITHUB_OUTPUT        
         git config --global user.name "erwinabs"
         git config --global user.email "erwinabubakarsidik@gmail.com"
         repo init --depth=1 -u ${{ github.event.inputs.MANIFEST_URL }} -b ${{ github.event.inputs.MANIFEST_BRANCH }}
-        repo sync -j$(nproc --all) --force-sync
+        id: pwd
 
+- name: Repo Sync
+      run: |
+        repo sync -j$(nproc --all) --force-sync
+      working-directory: workspace
+-
     - name: Clone Device Tree
       run: |
-        cd ${GITHUB_WORKSPACE}/pbrp
         git clone ${{ github.event.inputs.DEVICE_TREE }} -b ${{ github.event.inputs.DEVICE_TREE_BRANCH }} ./${{ github.event.inputs.DEVICE_PATH }}
         cd ${{ github.event.inputs.DEVICE_PATH }}
         echo "COMMIT_ID=$(git rev-parse HEAD)" >> $GITHUB_ENV
+      working-directory: ${{ steps.pwd.outputs.workspace-folder }}
+
+    - name: Check Build Tree
+      uses: haya14busa/action-cond@v1
+      id: buildtree
+      with:
+        cond: ${{ github.event.inputs.MANIFEST_BRANCH == 'android-11.0 || github.event.inputs.MANIFEST_BRANCH == 'android-12.1' }}
+        if_true: twrp
+        if_false: omni
 
     - name: Building PBRP
       run: |
-        cd ${GITHUB_WORKSPACE}/pbrp
-        set +e
         source build/envsetup.sh
         export ALLOW_MISSING_DEPENDENCIES=true
         set -e
         lunch twrp_${{ github.event.inputs.DEVICE_NAME }}-eng && make clean && mka ${{ github.event.inputs.BUILD_TARGET }}
+      working-directory: ${{ steps.pwd.outputs.workspace-folder }}
 
     - name: Set Release Properties
       run: |
         echo "BUILD_DATE=$(TZ=Asia/Manila date +%Y%m%d)" >> $GITHUB_ENV
-        cd ${GITHUB_WORKSPACE}/pbrp
-        echo "MD5_IMG=$(md5sum out/target/product/${{ github.event.inputs.DEVICE_NAME }}/${{ github.event.inputs.BUILD_TARGET }}.img | cut -d ' ' -f 1)" >> $GITHUB_ENV
+        echo "MD5_IMG=$(md5sum out/target/product/${{ github.event.inputs.DEVICE_NAME }}/*.img | cut -d ' ' -f 1)" >> $GITHUB_ENV
         echo "MD5_ZIP=$(md5sum out/target/product/${{ github.event.inputs.DEVICE_NAME }}/PBRP*.zip | cut -d ' ' -f 1)" >> $GITHUB_ENV
 
     - name: Upload to Release
       uses: softprops/action-gh-release@v1
       with:
         files: |
-          pbrp${{ github.event.inputs.MANIFEST_BRANCH }}/out/target/product/${{ github.event.inputs.DEVICE_NAME }}/*.img
-          pbp${{ github.event.inputs.MANIFEST_BRANCH }}/out/target/product/${{ github.event.inputs.DEVICE_NAME }}/PBRP*.zip
+          workspace${{ github.event.inputs.MANIFEST_BRANCH }}/out/target/product/${{ github.event.inputs.DEVICE_NAME }}/*.img
+          workspace${{ github.event.inputs.MANIFEST_BRANCH }}/out/target/product/${{ github.event.inputs.DEVICE_NAME }}/PBRP*.zip
         name: pbrp for ${{ github.event.inputs.DEVICE_NAME }} // ${{ env.BUILD_DATE }}
         tag_name: ${{ github.run_id }}
         body: |
