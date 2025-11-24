@@ -177,12 +177,27 @@ jobs:
         TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
       continue-on-error: true
 
-    - name: Building Recovery dan Progress Bar Berjalan
-      id: build_recovery
+    - name: Start Build (Background)
+      id: start_build
+      run: |
+        source build/envsetup.sh
+        export ALLOW_MISSING_DEPENDENCIES=true
+        
+        # Jalankan build di background dan simpan output ke log file
+        lunch ${{ github.event.inputs.MAKEFILE_NAME }}-eng && make clean && make ${{ github.event.inputs.BUILD_TARGET }}image -j$(nproc --all) > build.log 2>&1 &
+        BUILD_PID=$!
+        
+        # Simpan PID ke file atau output untuk langkah berikutnya
+        echo "BUILD_PID=$BUILD_PID" >> $GITHUB_OUTPUT
+      working-directory: ${{ steps.pwd.outputs.workspace-folder }}
+
+    - name: Monitor Progress dan Cek Hasil Akhir
+      id: monitor_build
       timeout-minutes: 180
       run: |
-        # Inisialisasi variabel untuk Telegram
+        # Inisialisasi variabel dari langkah sebelumnya
         MESSAGE_ID="${{ steps.start_notify.outputs.telegram_message_id }}"
+        BUILD_PID="${{ steps.start_build.outputs.BUILD_PID }}"
         BOT_TOKEN="${{ secrets.TELEGRAM_BOT_TOKEN }}"
         CHAT_ID="${{ secrets.TELEGRAM_CHAT_ID }}"
         DEVICE="${{ github.event.inputs.DEVICE_NAME }}"
@@ -214,17 +229,6 @@ jobs:
                 <a href='$RUN_URL'>Lihat Log</a>
                 "
         }
-        
-        # -----------------------------------------------------
-        # START BUILD DI BACKGROUND
-        # -----------------------------------------------------
-        
-        source build/envsetup.sh
-        export ALLOW_MISSING_DEPENDENCIES=true
-        
-        # Jalankan build di background
-        lunch ${{ github.event.inputs.MAKEFILE_NAME }}-eng && make clean && make ${{ github.event.inputs.BUILD_TARGET }}image -j$(nproc --all) > build.log 2>&1 &
-        BUILD_PID=$!
         
         # -----------------------------------------------------
         # LOOP PROGRESS MONITORING
@@ -260,7 +264,7 @@ jobs:
         
         if [ $EXIT_CODE -eq 0 ]; then
             update_telegram 100 "Build Selesai (SUCCESS)"
-            exit 0
+            echo "Build berhasil, melanjutkan ke Upload."
         else
             update_telegram 100 "Build Gagal (ERROR)"
             cat build.log
