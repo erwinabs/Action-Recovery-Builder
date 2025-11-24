@@ -201,6 +201,7 @@ jobs:
                 if [ $i -le $filled ]; then bar="${bar}█"; else bar="${bar}░"; fi
             done
             
+            # Penggunaan variabel BOT_TOKEN dan CHAT_ID
             curl -s -X POST "https://api.telegram.org/bot$BOT_TOKEN/editMessageText" \
                 -d chat_id="$CHAT_ID" \
                 -d message_id="$MESSAGE_ID" \
