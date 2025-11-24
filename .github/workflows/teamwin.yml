@@ -153,7 +153,7 @@ jobs:
     # --- START: Integrasi Telegram untuk Progress Bar ---
     # ------------------------------------------------------------------
 
-    - name: 🔔 Notifikasi Telegram: Build Dimulai & Inisialisasi Progress Bar
+    - name: Notifikasi Telegram: Build Dimulai & Inisialisasi Progress Bar
       id: start_notify
       run: |
         # Kirim pesan awal dan simpan ID pesan yang dikembalikan
@@ -161,12 +161,12 @@ jobs:
         -d chat_id="${{ secrets.TELEGRAM_CHAT_ID }}" \
         -d parse_mode="HTML" \
         -d text="
-        <b>🛠️ TWRP Build Dimulai!</b>
+        <b>TWRP Build Dimulai!</b>
         
         <b>Perangkat:</b> <code>${{ github.event.inputs.DEVICE_NAME }}</code>
         <b>Target:</b> <code>${{ github.event.inputs.BUILD_TARGET }}</code>
         
-        <b>Progress:</b> 🏃‍♂️ Menghitung...
+        <b>Progress:</b> Menghitung...
         ")
         
         # Ekstrak message_id dari response JSON dan simpan sebagai output
@@ -177,7 +177,7 @@ jobs:
         TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
       continue-on-error: true
 
-    - name: 🚀 Building Recovery dan Progress Bar Berjalan
+    - name: Building Recovery dan Progress Bar Berjalan
       id: build_recovery
       timeout-minutes: 180
       run: |
@@ -193,7 +193,7 @@ jobs:
             local bar=""
             local filled=$((percentage / 20)) # 5 blocks (20% per block)
 
-            # Generate Bar
+            # Generate Bar (Menggunakan karakter Unicode untuk progress bar)
             for i in {1..5}; do
                 if [ $i -le $filled ]; then
                     bar="${bar}█" # Block penuh
@@ -203,12 +203,12 @@ jobs:
             done
             
             # Kirim Update
-            curl -s -X POST "https://api.telegram.org/bot${{ secrets.TELEGRAM_BOT_TOKEN }}/editMessageText" \
+            curl -s -X POST "https://api.telegram.org/bot$TELEGRAM_BOT_TOKEN/editMessageText" \
                 -d chat_id="$TELEGRAM_CHAT_ID" \
                 -d message_id="$MESSAGE_ID" \
                 -d parse_mode="HTML" \
                 -d text="
-                <b>🛠️ TWRP Build Berjalan...</b>
+                <b>TWRP Build Berjalan...</b>
                 
                 <b>Perangkat:</b> <code>${{ github.event.inputs.DEVICE_NAME }}</code>
                 <b>Status:</b> ${status_text}
@@ -232,6 +232,10 @@ jobs:
         # -----------------------------------------------------
         # LOOP PROGRESS MONITORING
         # -----------------------------------------------------
+        # Memberikan variabel env ke fungsi update_telegram secara eksplisit
+        TELEGRAM_BOT_TOKEN="${{ secrets.TELEGRAM_BOT_TOKEN }}"
+        TELEGRAM_CHAT_ID="${{ secrets.TELEGRAM_CHAT_ID }}"
+        
         update_telegram 0 "Initializing Build Environment..."
         sleep 10
         
@@ -263,10 +267,10 @@ jobs:
         EXIT_CODE=$?
         
         if [ $EXIT_CODE -eq 0 ]; then
-            update_telegram 100 "✅ Build Selesai (SUCCESS)"
+            update_telegram 100 "Build Selesai (SUCCESS)"
             exit 0
         else
-            update_telegram 100 "❌ Build Gagal (ERROR)"
+            update_telegram 100 "Build Gagal (ERROR)"
             cat build.log
             exit 1
         fi
@@ -295,4 +299,3 @@ jobs:
           Target: ${{ github.event.inputs.BUILD_TARGET }}.img
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        
