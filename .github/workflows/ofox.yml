@@ -119,108 +119,126 @@ jobs:
       with:
         swap-size-gb: 12
 
-    - name: Building recovery with Progress Bar
-      id: build_step
+    # ========================================================
+    # LANGKAH UTAMA: BUILD, NOTIFIKASI, DAN UPLOAD
+    # ========================================================
+    - name: Building OrangeFox with Telegram Notify
+      id: build_process
       env:
         TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
         CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
         FOX_PATH: ${{ steps.pwd.outputs.workspace-folder }}/fox_${{ github.event.inputs.MANIFEST_BRANCH }}
+        DEVICE: ${{ github.event.inputs.DEVICE_NAME }}
       run: |
         cd $FOX_PATH
         
-        # 1. Send Initial Message
-        TXT="OrangeFox Build Started%0ADevice: ${{ github.event.inputs.DEVICE_NAME }}"
+        # --- 1. Inisialisasi Waktu & Pesan Awal ---
+        START_TIME=$(date +%s)
+        INIT_TXT="<b>Build Started</b>%0ADevice: <code>$DEVICE</code>%0AProgress: 0%"
+        
         RESP=$(curl -s -X POST "https://api.telegram.org/bot$TOKEN/sendMessage" \
         -d chat_id="$CHAT_ID" \
         -d parse_mode="HTML" \
-        -d text="$TXT")
-        MSG_ID=$(echo "$RESP" | python3 -c "import sys, json; print(json.load(sys.stdin)['result']['message_id'])")
+        -d text="$INIT_TXT")
         
-        # 2. Start Build in Background
+        # Ambil Message ID untuk diedit nanti
+        MSG_ID=$(echo "$RESP" | python3 -c "import sys, json; print(json.load(sys.stdin)['result']['message_id'])")
+
+        # --- 2. Mulai Build di Background ---
         source build/envsetup.sh
         export ALLOW_MISSING_DEPENDENCIES=true
+        
+        # Jalankan command build di background (&)
         lunch ${{ github.event.inputs.MAKEFILE_NAME }}-eng && make clean && mka adbd ${{ github.event.inputs.BUILD_TARGET }}image -j$(nproc --all) > build.log 2>&1 &
         BPID=$!
-        
-        # 3. Progress Loop
+
+        # --- 3. Loop Monitoring Progress ---
         while ps -p $BPID > /dev/null; do
             PERC=0
-            STATUS="Compiling..."
+            STATUS="Initializing..."
             
-            # Logic to guess progress based on logs
-            if grep -q "Starting build" build.log; then PERC=10; fi
-            if grep -q "target thumb C" build.log; then PERC=30; fi
-            if grep -q "target C++" build.log; then PERC=50; fi
-            if grep -q "Building recovery" build.log; then PERC=80; STATUS="Linking..."; fi
-            
-            # Create Text Bar [====....]
-            BAR="["
+            # Cek log untuk memperkirakan persentase
+            if grep -q "Starting build" build.log; then PERC=10; STATUS="Compiling..."; fi
+            if grep -q "target thumb C" build.log; then PERC=30; STATUS="Compiling C++..."; fi
+            if grep -q "target C++" build.log; then PERC=50; STATUS="Compiling Objects..."; fi
+            if grep -q "Building recovery" build.log; then PERC=80; STATUS="Linking Recovery..."; fi
+            if grep -q "Made recovery image" build.log; then PERC=90; STATUS="Packaging..."; fi
+
+            # Buat Progress Bar Visual (10 blok)
+            BAR=""
             FILLED=$((PERC / 10))
             for i in {1..10}; do
-                if [ $i -le $FILLED ]; then BAR="${BAR}="; else BAR="${BAR}."; fi
+                if [ $i -le $FILLED ]; then BAR="${BAR}█"; else BAR="${BAR}░"; fi
             done
-            BAR="${BAR}]"
             
-            # Update Telegram
-            NEW_TXT="OrangeFox Build ${{ github.event.inputs.DEVICE_NAME }}%0AStatus: $STATUS%0AProgress: $BAR $PERC%"
+            # Kirim Update ke Telegram
+            UPDATE_TXT="<b>Building OrangeFox...</b>%0ADevice: <code>$DEVICE</code>%0AStatus: $STATUS%0AProgress: $BAR $PERC%"
+            
             curl -s -X POST "https://api.telegram.org/bot$TOKEN/editMessageText" \
             -d chat_id="$CHAT_ID" \
             -d message_id="$MSG_ID" \
             -d parse_mode="HTML" \
-            -d text="$NEW_TXT" > /dev/null
+            -d text="$UPDATE_TXT" > /dev/null
             
             sleep 30
         done
-        
-        # 4. Check Exit Code
+
+        # --- 4. Selesai Build & Hitung Waktu ---
         wait $BPID
         EXIT_CODE=$?
+        END_TIME=$(date +%s)
+        ELAPSED=$((END_TIME - START_TIME))
         
+        # Konversi detik ke Menit:Detik
+        MIN=$((ELAPSED / 60))
+        SEC=$((ELAPSED % 60))
+        DURATION="${MIN}m ${SEC}s"
+
         if [ $EXIT_CODE -eq 0 ]; then
-            FINAL_TXT="OrangeFox Build Success for ${{ github.event.inputs.DEVICE_NAME }}"
+            # --- BUILD SUKSES ---
+            
+            # Cari nama file ZIP hasil build
+            OUT_DIR="$FOX_PATH/out/target/product/$DEVICE"
+            ZIP_PATH=$(find "$OUT_DIR" -maxdepth 1 -name "*.zip" | head -n 1)
+            IMG_PATH=$(find "$OUT_DIR" -maxdepth 1 -name "OrangeFox*.img" -o -name "recovery.img" | head -n 1)
+            ZIP_NAME=$(basename "$ZIP_PATH")
+
+            # Pesan Final (Tanpa Clang)
+            FINAL_MSG="<b>PROGRESS:</b> ██████████ 100% — Build Complete!
+            🎉 <b>File:</b> <code>$ZIP_NAME</code>
+            ⏱ <b>Build:</b> <code>$DURATION</code>"
+
+            # Update pesan status menjadi pesan final
             curl -s -X POST "https://api.telegram.org/bot$TOKEN/editMessageText" \
             -d chat_id="$CHAT_ID" \
             -d message_id="$MSG_ID" \
-            -d text="$FINAL_TXT"
+            -d parse_mode="HTML" \
+            -d text="$FINAL_MSG"
+
+            # --- UPLOAD FILE ---
+            if [ -f "$IMG_PATH" ]; then
+                echo "Uploading IMG..."
+                curl -F document=@"$IMG_PATH" "https://api.telegram.org/bot$TOKEN/sendDocument?chat_id=$CHAT_ID&caption=Recovery Image ($DEVICE)"
+            fi
+            
+            if [ -f "$ZIP_PATH" ]; then
+                echo "Uploading ZIP..."
+                curl -F document=@"$ZIP_PATH" "https://api.telegram.org/bot$TOKEN/sendDocument?chat_id=$CHAT_ID&caption=Recovery Zip ($DEVICE)"
+            fi
+
         else
-            FINAL_TXT="OrangeFox Build Failed for ${{ github.event.inputs.DEVICE_NAME }}"
+            # --- BUILD GAGAL ---
+            FAIL_MSG="❌ <b>Build Failed!</b>%0ADevice: <code>$DEVICE</code>%0ADuration: <code>$DURATION</code>%0ACheck GitHub Actions logs."
+            
             curl -s -X POST "https://api.telegram.org/bot$TOKEN/editMessageText" \
             -d chat_id="$CHAT_ID" \
             -d message_id="$MSG_ID" \
-            -d text="$FINAL_TXT"
+            -d parse_mode="HTML" \
+            -d text="$FAIL_MSG"
+            
             exit 1
         fi
       working-directory: ${{ steps.pwd.outputs.workspace-folder }}
-
-    - name: Upload to Telegram
-      if: success()
-      env:
-        TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
-        CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
-        FOX_PATH: ${{ steps.pwd.outputs.workspace-folder }}/fox_${{ github.event.inputs.MANIFEST_BRANCH }}
-      run: |
-        # Define output path
-        OUT_PATH="$FOX_PATH/out/target/product/${{ github.event.inputs.DEVICE_NAME }}"
-        
-        # Find Files
-        IMG=$(find "$OUT_PATH" -maxdepth 1 -name "OrangeFox*.img" -o -name "recovery.img" | head -n 1)
-        ZIP=$(find "$OUT_PATH" -maxdepth 1 -name "OrangeFox*.zip" | head -n 1)
-        
-        # Upload Image
-        if [ -f "$IMG" ]; then
-            echo "Uploading $IMG..."
-            curl -F document=@"$IMG" "https://api.telegram.org/bot$TOKEN/sendDocument?chat_id=$CHAT_ID&caption=OrangeFox Recovery Image"
-        else
-            echo "Image file not found."
-        fi
-        
-        # Upload Zip
-        if [ -f "$ZIP" ]; then
-             echo "Uploading $ZIP..."
-            curl -F document=@"$ZIP" "https://api.telegram.org/bot$TOKEN/sendDocument?chat_id=$CHAT_ID&caption=OrangeFox Recovery Zip"
-        else
-            echo "Zip file not found."
-        fi
 
     - name: Upload to Release
       uses: softprops/action-gh-release@v2
