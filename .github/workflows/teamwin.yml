@@ -204,7 +204,7 @@ jobs:
             
             # Kirim Update
             curl -s -X POST "https://api.telegram.org/bot${{ secrets.TELEGRAM_BOT_TOKEN }}/editMessageText" \
-                -d chat_id="${{ secrets.TELEGRAM_CHAT_ID }}" \
+                -d chat_id="$TELEGRAM_CHAT_ID" \
                 -d message_id="$MESSAGE_ID" \
                 -d parse_mode="HTML" \
                 -d text="
@@ -258,6 +258,7 @@ jobs:
         # -----------------------------------------------------
         # CEK HASIL AKHIR
         # -----------------------------------------------------
+        # Tunggu proses background selesai dan ambil exit code-nya
         wait $BUILD_PID
         EXIT_CODE=$?
         
