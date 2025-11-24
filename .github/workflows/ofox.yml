@@ -50,11 +50,9 @@ jobs:
       contents: write
     steps:
  
-    # You might want to Checkout your repo first, but not mandatory
     - name: Check Out
       uses: actions/checkout@v4
 
-    # Cleanup The Actions Workspace Using Custom Composite Run Actions
     - name: Cleanup
       uses: rokibhasansagar/slimhub_actions@main
 
@@ -121,22 +119,108 @@ jobs:
       with:
         swap-size-gb: 12
 
-    - name: Building recovery
+    - name: Building recovery with Progress Bar
+      id: build_step
+      env:
+        TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+        CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+        FOX_PATH: ${{ steps.pwd.outputs.workspace-folder }}/fox_${{ github.event.inputs.MANIFEST_BRANCH }}
       run: |
-        cd ${{ steps.pwd.outputs.workspace-folder }}/fox_${{ github.event.inputs.MANIFEST_BRANCH }}
-        set +e
+        cd $FOX_PATH
+        
+        # 1. Send Initial Message
+        TXT="OrangeFox Build Started%0ADevice: ${{ github.event.inputs.DEVICE_NAME }}"
+        RESP=$(curl -s -X POST "https://api.telegram.org/bot$TOKEN/sendMessage" \
+        -d chat_id="$CHAT_ID" \
+        -d parse_mode="HTML" \
+        -d text="$TXT")
+        MSG_ID=$(echo "$RESP" | python3 -c "import sys, json; print(json.load(sys.stdin)['result']['message_id'])")
+        
+        # 2. Start Build in Background
         source build/envsetup.sh
         export ALLOW_MISSING_DEPENDENCIES=true
-        set -e
-        lunch ${{ github.event.inputs.MAKEFILE_NAME }}-eng && make clean && mka adbd ${{ github.event.inputs.BUILD_TARGET }}image -j$(nproc --all)
+        lunch ${{ github.event.inputs.MAKEFILE_NAME }}-eng && make clean && mka adbd ${{ github.event.inputs.BUILD_TARGET }}image -j$(nproc --all) > build.log 2>&1 &
+        BPID=$!
+        
+        # 3. Progress Loop
+        while ps -p $BPID > /dev/null; do
+            PERC=0
+            STATUS="Compiling..."
+            
+            # Logic to guess progress based on logs
+            if grep -q "Starting build" build.log; then PERC=10; fi
+            if grep -q "target thumb C" build.log; then PERC=30; fi
+            if grep -q "target C++" build.log; then PERC=50; fi
+            if grep -q "Building recovery" build.log; then PERC=80; STATUS="Linking..."; fi
+            
+            # Create Text Bar [====....]
+            BAR="["
+            FILLED=$((PERC / 10))
+            for i in {1..10}; do
+                if [ $i -le $FILLED ]; then BAR="${BAR}="; else BAR="${BAR}."; fi
+            done
+            BAR="${BAR}]"
+            
+            # Update Telegram
+            NEW_TXT="OrangeFox Build ${{ github.event.inputs.DEVICE_NAME }}%0AStatus: $STATUS%0AProgress: $BAR $PERC%"
+            curl -s -X POST "https://api.telegram.org/bot$TOKEN/editMessageText" \
+            -d chat_id="$CHAT_ID" \
+            -d message_id="$MSG_ID" \
+            -d parse_mode="HTML" \
+            -d text="$NEW_TXT" > /dev/null
+            
+            sleep 30
+        done
+        
+        # 4. Check Exit Code
+        wait $BPID
+        EXIT_CODE=$?
+        
+        if [ $EXIT_CODE -eq 0 ]; then
+            FINAL_TXT="OrangeFox Build Success for ${{ github.event.inputs.DEVICE_NAME }}"
+            curl -s -X POST "https://api.telegram.org/bot$TOKEN/editMessageText" \
+            -d chat_id="$CHAT_ID" \
+            -d message_id="$MSG_ID" \
+            -d text="$FINAL_TXT"
+        else
+            FINAL_TXT="OrangeFox Build Failed for ${{ github.event.inputs.DEVICE_NAME }}"
+            curl -s -X POST "https://api.telegram.org/bot$TOKEN/editMessageText" \
+            -d chat_id="$CHAT_ID" \
+            -d message_id="$MSG_ID" \
+            -d text="$FINAL_TXT"
+            exit 1
+        fi
       working-directory: ${{ steps.pwd.outputs.workspace-folder }}
-      continue-on-error: true
 
-    - name: Check the output directory before uploading
+    - name: Upload to Telegram
+      if: success()
+      env:
+        TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+        CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+        FOX_PATH: ${{ steps.pwd.outputs.workspace-folder }}/fox_${{ github.event.inputs.MANIFEST_BRANCH }}
       run: |
-        ls -al ${{ steps.pwd.outputs.workspace-folder }}/fox_${{ github.event.inputs.MANIFEST_BRANCH }}/out/target/product/
-        echo
-        ls -al ${{ steps.pwd.outputs.workspace-folder }}/fox_${{ github.event.inputs.MANIFEST_BRANCH }}/out/target/product/${{ github.event.inputs.DEVICE_NAME }}/
+        # Define output path
+        OUT_PATH="$FOX_PATH/out/target/product/${{ github.event.inputs.DEVICE_NAME }}"
+        
+        # Find Files
+        IMG=$(find "$OUT_PATH" -maxdepth 1 -name "OrangeFox*.img" -o -name "recovery.img" | head -n 1)
+        ZIP=$(find "$OUT_PATH" -maxdepth 1 -name "OrangeFox*.zip" | head -n 1)
+        
+        # Upload Image
+        if [ -f "$IMG" ]; then
+            echo "Uploading $IMG..."
+            curl -F document=@"$IMG" "https://api.telegram.org/bot$TOKEN/sendDocument?chat_id=$CHAT_ID&caption=OrangeFox Recovery Image"
+        else
+            echo "Image file not found."
+        fi
+        
+        # Upload Zip
+        if [ -f "$ZIP" ]; then
+             echo "Uploading $ZIP..."
+            curl -F document=@"$ZIP" "https://api.telegram.org/bot$TOKEN/sendDocument?chat_id=$CHAT_ID&caption=OrangeFox Recovery Zip"
+        else
+            echo "Zip file not found."
+        fi
 
     - name: Upload to Release
       uses: softprops/action-gh-release@v2
@@ -152,3 +236,4 @@ jobs:
           Target: ${{ github.event.inputs.BUILD_TARGET }}
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        
