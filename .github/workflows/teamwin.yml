@@ -1,4 +1,4 @@
-name: teamwin build
+name: twrp Build
 
 on:
   workflow_dispatch:
@@ -149,7 +149,9 @@ jobs:
       with:
         swap-size-gb: 12
 
-    # --- Bagian Integrasi Telegram ---
+    # ------------------------------------------------------------------
+    # --- START: Integrasi Telegram untuk Progress Bar ---
+    # ------------------------------------------------------------------
 
     - name: 🔔 Notifikasi Telegram: Build Dimulai & Inisialisasi Progress Bar
       id: start_notify
@@ -168,7 +170,6 @@ jobs:
         ")
         
         # Ekstrak message_id dari response JSON dan simpan sebagai output
-        # Membutuhkan python3
         MESSAGE_ID=$(echo "$RESPONSE" | python3 -c "import sys, json; print(json.load(sys.stdin)['result']['message_id'])")
         echo "telegram_message_id=$MESSAGE_ID" >> $GITHUB_OUTPUT
       env:
@@ -274,7 +275,9 @@ jobs:
         TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
         TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
 
-    # --- Akhir Integrasi Telegram ---
+    # ------------------------------------------------------------------
+    # --- END: Integrasi Telegram ---
+    # ------------------------------------------------------------------
 
     - name: Upload to Release
       uses: softprops/action-gh-release@v2
