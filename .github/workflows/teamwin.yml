@@ -147,7 +147,7 @@ jobs:
         with:
           swap-size-gb: 12
 
-      - name: Notifikasi Telegram: Build Dimulai dan Inisialisasi Progress Bar
+      - name: Notifikasi Telegram
         id: start_notify
         run: |
           RESPONSE=$(curl -s -X POST "https://api.telegram.org/bot${{ secrets.TELEGRAM_BOT_TOKEN }}/sendMessage" \
