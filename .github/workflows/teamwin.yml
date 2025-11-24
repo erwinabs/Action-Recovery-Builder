@@ -49,29 +49,29 @@ jobs:
     permissions:
       contents: write
     steps:
-    - name: Display Run Parameters
-      run: |
-        echo "::group::User Environment Variables"
-        echo "Manifest URL: ${{ github.event.inputs.MANIFEST_URL }}"
-        echo "Manifest Branch: ${{ github.event.inputs.MANIFEST_BRANCH }}"
-        echo "Device Tree URL: ${{ github.event.inputs.DEVICE_TREE_URL }}"
-        echo "Device Tree Branch: ${{ github.event.inputs.DEVICE_TREE_BRANCH }}"
-        echo "Device Path: ${{ github.event.inputs.DEVICE_PATH }}"
-        echo "Device Name: ${{ github.event.inputs.DEVICE_NAME }}"
-        echo "Makefile Name: ${{ github.event.inputs.MAKEFILE_NAME }}"
-        echo "Build Target: ${{ github.event.inputs.BUILD_TARGET }}.img"
-        echo "::endgroup::"
+      - name: Display Run Parameters
+        run: |
+          echo "::group::User Environment Variables"
+          echo "Manifest URL: ${{ github.event.inputs.MANIFEST_URL }}"
+          echo "Manifest Branch: ${{ github.event.inputs.MANIFEST_BRANCH }}"
+          echo "Device Tree URL: ${{ github.event.inputs.DEVICE_TREE_URL }}"
+          echo "Device Tree Branch: ${{ github.event.inputs.DEVICE_TREE_BRANCH }}"
+          echo "Device Path: ${{ github.event.inputs.DEVICE_PATH }}"
+          echo "Device Name: ${{ github.event.inputs.DEVICE_NAME }}"
+          echo "Makefile Name: ${{ github.event.inputs.MAKEFILE_NAME }}"
+          echo "Build Target: ${{ github.event.inputs.BUILD_TARGET }}.img"
+          echo "::endgroup::"
 
-    - name: Check Out
-      uses: actions/checkout@v4
+      - name: Check Out
+        uses: actions/checkout@v4
 
-    - name: Cleanup
-      uses: rokibhasansagar/slimhub_actions@main
+      - name: Cleanup
+        uses: rokibhasansagar/slimhub_actions@main
 
-    - name: Prepare the environment
-      run: |
-        sudo apt update && sudo apt upgrade -y
-        DEBIAN_FRONTEND=noninteractive sudo apt install -yq \
+      - name: Prepare the environment
+        run: |
+          sudo apt update && sudo apt upgrade -y
+          DEBIAN_FRONTEND=noninteractive sudo apt install -yq \
             linux-modules-extra-$(uname -r) \
             gperf gcc-multilib gcc-10-multilib g++-multilib g++-10-multilib \
             libc6-dev lib32ncurses-dev x11proto-core-dev libx11-dev tree lib32z-dev libgl1-mesa-dev libxml2-utils \
@@ -79,145 +79,142 @@ jobs:
             build-essential libgtk-3-dev libglu1-mesa-dev freeglut3-dev git libxml2 lzop pngcrush schedtool squashfs-tools \
             imagemagick libbz2-dev lzma ncftp qemu-user-static libstdc++-10-dev libncurses6 python3 tar
 
-    - name: Install OpenJDK
-      uses: actions/setup-java@v4
-      with:
-        distribution: 'zulu'
-        java-version: '11'
+      - name: Install OpenJDK
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'zulu'
+          java-version: '11'
 
-    - name: Setup SSH Keys
-      if: ${{ startsWith(github.event.inputs.MANIFEST_URL, 'git@github.com') || 
-          startsWith(github.event.inputs.DEVICE_TREE_URL, 'git@github.com') ||
-          startsWith(github.event.inputs.COMMON_TREE_URL, 'git@github.com') }}
-      uses: webfactory/ssh-agent@v0.9.0
-      with:
+      - name: Setup SSH Keys
+        if: startsWith(github.event.inputs.MANIFEST_URL, 'git@github.com') ||
+            startsWith(github.event.inputs.DEVICE_TREE_URL, 'git@github.com') ||
+            startsWith(github.event.inputs.COMMON_TREE_URL, 'git@github.com')
+        uses: webfactory/ssh-agent@v0.9.0
+        with:
           ssh-private-key: |
             ${{ secrets.SSH_PRIVATE_KEY }}
 
-    - name: Install repo
-      run: |
-        mkdir ~/bin
-        curl https://storage.googleapis.com/git-repo-downloads/repo > ~/bin/repo
-        chmod a+x ~/bin/repo
-        sudo ln -sf ~/bin/repo /usr/bin/repo
+      - name: Install repo
+        run: |
+          mkdir ~/bin
+          curl https://storage.googleapis.com/git-repo-downloads/repo > ~/bin/repo
+          chmod a+x ~/bin/repo
+          sudo ln -sf ~/bin/repo /usr/bin/repo
 
-    - name: Initialize repo
-      run: |
-        mkdir workspace
-        cd workspace
-        echo "workspace-folder=$(pwd)" >> $GITHUB_OUTPUT
-        git config --global user.name "Nico170420"
-        git config --global user.email "b170420nc@gmail.com"
-        repo init --depth=1 -u ${{ github.event.inputs.MANIFEST_URL }} -b ${{ github.event.inputs.MANIFEST_BRANCH }}
-      id: pwd
+      - name: Initialize repo
+        run: |
+          mkdir workspace
+          cd workspace
+          echo "workspace-folder=$(pwd)" >> $GITHUB_OUTPUT
+          git config --global user.name "Nico170420"
+          git config --global user.email "b170420nc@gmail.com"
+          repo init --depth=1 -u ${{ github.event.inputs.MANIFEST_URL }} -b ${{ github.event.inputs.MANIFEST_BRANCH }}
+        id: pwd
 
-    - name: Repo Sync
-      run: |
-        repo sync -j$(nproc --all) --force-sync
-      working-directory: workspace
+      - name: Repo Sync
+        run: |
+          repo sync -j$(nproc --all) --force-sync
+        working-directory: workspace
 
-    - name: Clone device tree
-      run: |
-        git clone ${{ github.event.inputs.DEVICE_TREE_URL }} -b ${{ github.event.inputs.DEVICE_TREE_BRANCH }} ./${{ github.event.inputs.DEVICE_PATH }}
-      working-directory: ${{ steps.pwd.outputs.workspace-folder }}
+      - name: Clone device tree
+        run: |
+          git clone ${{ github.event.inputs.DEVICE_TREE_URL }} -b ${{ github.event.inputs.DEVICE_TREE_BRANCH }} ./${{ github.event.inputs.DEVICE_PATH }}
+        working-directory: ${{ steps.pwd.outputs.workspace-folder }}
 
-    - name: Clone common tree
-      if: |
-        github.event.inputs.COMMON_TREE_URL != null
-        && github.event.inputs.COMMON_PATH != null
-      run: |
-        git clone ${{ github.event.inputs.COMMON_TREE_URL }} -b ${{ github.event.inputs.DEVICE_TREE_BRANCH }} ./${{ github.event.inputs.COMMON_PATH }}
-      working-directory: ${{ steps.pwd.outputs.workspace-folder }}
+      - name: Clone common tree
+        if: github.event.inputs.COMMON_TREE_URL != null && github.event.inputs.COMMON_PATH != null
+        run: |
+          git clone ${{ github.event.inputs.COMMON_TREE_URL }} -b ${{ github.event.inputs.DEVICE_TREE_BRANCH }} ./${{ github.event.inputs.COMMON_PATH }}
+        working-directory: ${{ steps.pwd.outputs.workspace-folder }}
 
-    - name: Check Build Tree
-      uses: haya14busa/action-cond@v1
-      id: buildtree
-      with:
-        cond: ${{ github.event.inputs.MANIFEST_BRANCH == 'twrp-11' || github.event.inputs.MANIFEST_BRANCH == 'twrp-12.1' }}
-        if_true: twrp
-        if_false: omni
+      - name: Check Build Tree
+        uses: haya14busa/action-cond@v1
+        id: buildtree
+        with:
+          cond: ${{ github.event.inputs.MANIFEST_BRANCH == 'twrp-11' || github.event.inputs.MANIFEST_BRANCH == 'twrp-12.1' }}
+          if_true: twrp
+          if_false: omni
 
-    - name: Sync Device Dependencies
-      run: |
-        bash ${GITHUB_WORKSPACE}/scripts/convert.sh ${{ github.event.inputs.DEVICE_PATH }}/${{ steps.buildtree.outputs.value }}.dependencies
-        repo sync -j$(nproc --all)
-      working-directory: ${{ steps.pwd.outputs.workspace-folder }}
-      continue-on-error: true
+      - name: Sync Device Dependencies
+        run: |
+          bash ${GITHUB_WORKSPACE}/scripts/convert.sh ${{ github.event.inputs.DEVICE_PATH }}/${{ steps.buildtree.outputs.value }}.dependencies
+          repo sync -j$(nproc --all)
+        working-directory: ${{ steps.pwd.outputs.workspace-folder }}
+        continue-on-error: true
 
-    - name: Set Swap Space
-      uses: pierotofy/set-swap-space@master
-      with:
-        swap-size-gb: 12
+      - name: Set Swap Space
+        uses: pierotofy/set-swap-space@master
+        with:
+          swap-size-gb: 12
 
-    # ------------------------------------------------------------------
-    # --- START: Integrasi Telegram untuk Progress Bar ---
-    # ------------------------------------------------------------------
+      # ------------------------------------------------------------------
+      # --- START: Integrasi Telegram untuk Progress Bar ---
+      # ------------------------------------------------------------------
 
-    - name: Notifikasi Telegram: Build Dimulai dan Inisialisasi Progress Bar
-      id: start_notify
-      run: |
-        # Kirim pesan awal dan simpan ID pesan yang dikembalikan
-        RESPONSE=$(curl -s -X POST "https://api.telegram.org/bot${{ secrets.TELEGRAM_BOT_TOKEN }}/sendMessage" \
-        -d chat_id="${{ secrets.TELEGRAM_CHAT_ID }}" \
-        -d parse_mode="HTML" \
-        -d text="
-        <b>TWRP Build Dimulai!</b>
-        
-        <b>Perangkat:</b> <code>${{ github.event.inputs.DEVICE_NAME }}</code>
-        <b>Target:</b> <code>${{ github.event.inputs.BUILD_TARGET }}</code>
-        
-        <b>Progress:</b> Menghitung...
-        ")
-        
-        # Ekstrak message_id
-        MESSAGE_ID=$(echo "$RESPONSE" | python3 -c "import sys, json; print(json.load(sys.stdin)['result']['message_id'])")
-        echo "telegram_message_id=$MESSAGE_ID" >> $GITHUB_OUTPUT
-      env:
-        TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
-        TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
-      continue-on-error: true
+      - name: Notifikasi Telegram: Build Dimulai dan Inisialisasi Progress Bar
+        id: start_notify
+        run: |
+          # Kirim pesan awal dan simpan ID pesan yang dikembalikan
+          RESPONSE=$(curl -s -X POST "https://api.telegram.org/bot${{ secrets.TELEGRAM_BOT_TOKEN }}/sendMessage" \
+            -d chat_id="${{ secrets.TELEGRAM_CHAT_ID }}" \
+            -d parse_mode="HTML" \
+            -d text="
+            <b>TWRP Build Dimulai!</b>
 
-    - name: Start Build (Background)
-      id: start_build
-      run: |
-        source build/envsetup.sh
-        export ALLOW_MISSING_DEPENDENCIES=true
-        
-        # Jalankan build di background dan simpan output ke log file
-        lunch ${{ github.event.inputs.MAKEFILE_NAME }}-eng && make clean && make ${{ github.event.inputs.BUILD_TARGET }}image -j$(nproc --all) > build.log 2>&1 &
-        BUILD_PID=$!
-        
-        # Simpan PID ke file atau output untuk langkah berikutnya
-        echo "BUILD_PID=$BUILD_PID" >> $GITHUB_OUTPUT
-      working-directory: ${{ steps.pwd.outputs.workspace-folder }}
+            <b>Perangkat:</b> <code>${{ github.event.inputs.DEVICE_NAME }}</code>
+            <b>Target:</b> <code>${{ github.event.inputs.BUILD_TARGET }}</code>
 
-    - name: Monitor Progress dan Cek Hasil Akhir
-      id: monitor_build
-      timeout-minutes: 180
-      run: |
-        # Inisialisasi variabel dari langkah sebelumnya
-        MESSAGE_ID="${{ steps.start_notify.outputs.telegram_message_id }}"
-        BUILD_PID="${{ steps.start_build.outputs.BUILD_PID }}"
-        BOT_TOKEN="${{ secrets.TELEGRAM_BOT_TOKEN }}"
-        CHAT_ID="${{ secrets.TELEGRAM_CHAT_ID }}"
-        DEVICE="${{ github.event.inputs.DEVICE_NAME }}"
-        RUN_URL="${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+            <b>Progress:</b> Menghitung...
+            ")
 
-        # -----------------------------------------------------
-        # FUNGSI PEMBARUAN TELEGRAM
-        # -----------------------------------------------------
-        update_telegram() {
-            local percentage=$1
-            local status_text=$2
-            local bar=""
-            local filled=$((percentage / 20))
+          # Ekstrak message_id
+          MESSAGE_ID=$(echo "$RESPONSE" | python3 -c "import sys, json; print(json.load(sys.stdin)['result']['message_id'])")
+          echo "telegram_message_id=$MESSAGE_ID" >> $GITHUB_OUTPUT
+        env:
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+        continue-on-error: true
 
-            for i in {1..5}; do
-                if [ $i -le $filled ]; then bar="${bar}█"; else bar="${bar}░"; fi
-            done
-            
-            # Penggunaan variabel BOT_TOKEN dan CHAT_ID
-            curl -s -X POST "https://api.telegram.org/bot$BOT_TOKEN/editMessageText" \
+      - name: Start Build (Background)
+        id: start_build
+        run: |
+          source build/envsetup.sh
+          export ALLOW_MISSING_DEPENDENCIES=true
+
+          # Jalankan build di background dan simpan output ke log file
+          lunch ${{ github.event.inputs.MAKEFILE_NAME }}-eng && make clean && make ${{ github.event.inputs.BUILD_TARGET }}image -j$(nproc --all) > build.log 2>&1 &
+          BUILD_PID=$!
+
+          # Simpan PID ke file atau output untuk langkah berikutnya
+          echo "BUILD_PID=$BUILD_PID" >> $GITHUB_OUTPUT
+        working-directory: ${{ steps.pwd.outputs.workspace-folder }}
+
+      - name: Monitor Progress dan Cek Hasil Akhir
+        id: monitor_build
+        timeout-minutes: 180
+        run: |
+          # Inisialisasi variabel dari langkah sebelumnya
+          MESSAGE_ID="${{ steps.start_notify.outputs.telegram_message_id }}"
+          BUILD_PID="${{ steps.start_build.outputs.BUILD_PID }}"
+          BOT_TOKEN="${{ secrets.TELEGRAM_BOT_TOKEN }}"
+          CHAT_ID="${{ secrets.TELEGRAM_CHAT_ID }}"
+          DEVICE="${{ github.event.inputs.DEVICE_NAME }}"
+          RUN_URL="${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+
+          # -----------------------------------------------------
+          # FUNGSI PEMBARUAN TELEGRAM
+          # -----------------------------------------------------
+          update_telegram() {
+              local percentage=$1
+              local status_text=$2
+              local bar=""
+              local filled=$((percentage / 20))
+
+              for i in $(seq 1 5); do
+                  if [ $i -le $filled ]; then bar="${bar}█"; else bar="${bar}░"; fi
+              done
+
+              curl -s -X POST "https://api.telegram.org/bot$BOT_TOKEN/editMessageText" \
                 -d chat_id="$CHAT_ID" \
                 -d message_id="$MESSAGE_ID" \
                 -d parse_mode="HTML" \
@@ -228,70 +225,69 @@ jobs:
                 <b>Progress:</b> ${bar} (${percentage}%)
                 <a href='$RUN_URL'>Lihat Log</a>
                 "
-        }
-        
-        # -----------------------------------------------------
-        # LOOP PROGRESS MONITORING
-        # -----------------------------------------------------
-        
-        update_telegram 0 "Initializing Build Environment..."
-        sleep 10
-        
-        LAST_PERCENT=0
-        
-        while ps -p $BUILD_PID > /dev/null; do
-            CURRENT_PERCENT=0
-            STATUS="Compiling files..."
-            
-            if grep -q "Copying device-specific ramdisk files" build.log; then CURRENT_PERCENT=20; STATUS="Copying ramdisk files..."; fi
-            if grep -q "Copying vendor partition files" build.log; then CURRENT_PERCENT=40; STATUS="Copying vendor files..."; fi
-            if grep -q "Building recovery image" build.log; then CURRENT_PERCENT=60; STATUS="Building recovery image..."; fi
-            if grep -q "Install recovery" build.log; then CURRENT_PERCENT=80; STATUS="Finalizing image..."; fi
-            
-            if [ $CURRENT_PERCENT -gt $LAST_PERCENT ]; then
-                update_telegram $CURRENT_PERCENT "$STATUS"
-                LAST_PERCENT=$CURRENT_PERCENT
-            fi
-            
-            sleep 60
-        done
-        
-        # -----------------------------------------------------
-        # CEK HASIL AKHIR
-        # -----------------------------------------------------
-        wait $BUILD_PID
-        EXIT_CODE=$?
-        
-        if [ $EXIT_CODE -eq 0 ]; then
-            update_telegram 100 "Build Selesai (SUCCESS)"
-            echo "Build berhasil, melanjutkan ke Upload."
-        else
-            update_telegram 100 "Build Gagal (ERROR)"
-            cat build.log
-            exit 1
-        fi
-        
-      working-directory: ${{ steps.pwd.outputs.workspace-folder }}
-      env:
-        TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
-        TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+          }
 
-    # ------------------------------------------------------------------
-    # --- END: Integrasi Telegram ---
-    # ------------------------------------------------------------------
+          # -----------------------------------------------------
+          # LOOP PROGRESS MONITORING
+          # -----------------------------------------------------
 
-    - name: Upload to Release
-      uses: softprops/action-gh-release@v2
-      with:
-        files: | 
-          workspace/out/target/product/${{ github.event.inputs.DEVICE_NAME }}/${{ github.event.inputs.BUILD_TARGET }}.img
-          workspace/out/target/product/${{ github.event.inputs.DEVICE_NAME }}/*.zip
-          workspace/out/target/product/${{ github.event.inputs.DEVICE_NAME }}/*vendor*.img
-        name: ${{ github.event.inputs.DEVICE_NAME }}-${{ github.run_id }}
-        tag_name: ${{ github.run_id }}
-        body: |
-          Manifest: ${{ github.event.inputs.MANIFEST_BRANCH }}
-          Device: ${{ github.event.inputs.DEVICE_NAME }}
-          Target: ${{ github.event.inputs.BUILD_TARGET }}.img
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          update_telegram 0 "Initializing Build Environment..."
+          sleep 10
+
+          LAST_PERCENT=0
+
+          while ps -p $BUILD_PID > /dev/null; do
+              CURRENT_PERCENT=0
+              STATUS="Compiling files..."
+
+              if grep -q "Copying device-specific ramdisk files" build.log; then CURRENT_PERCENT=20; STATUS="Copying ramdisk files..."; fi
+              if grep -q "Copying vendor partition files" build.log; then CURRENT_PERCENT=40; STATUS="Copying vendor files..."; fi
+              if grep -q "Building recovery image" build.log; then CURRENT_PERCENT=60; STATUS="Building recovery image..."; fi
+              if grep -q "Install recovery" build.log; then CURRENT_PERCENT=80; STATUS="Finalizing image..."; fi
+
+              if [ $CURRENT_PERCENT -gt $LAST_PERCENT ]; then
+                  update_telegram $CURRENT_PERCENT "$STATUS"
+                  LAST_PERCENT=$CURRENT_PERCENT
+              fi
+
+              sleep 60
+          done
+
+          # -----------------------------------------------------
+          # CEK HASIL AKHIR
+          # -----------------------------------------------------
+          wait $BUILD_PID
+          EXIT_CODE=$?
+
+          if [ $EXIT_CODE -eq 0 ]; then
+              update_telegram 100 "Build Selesai (SUCCESS)"
+              echo "Build berhasil, melanjutkan ke Upload."
+          else
+              update_telegram 100 "Build Gagal (ERROR)"
+              cat build.log
+              exit 1
+          fi
+        working-directory: ${{ steps.pwd.outputs.workspace-folder }}
+        env:
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+
+      # ------------------------------------------------------------------
+      # --- END: Integrasi Telegram ---
+      # ------------------------------------------------------------------
+
+      - name: Upload to Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            workspace/out/target/product/${{ github.event.inputs.DEVICE_NAME }}/${{ github.event.inputs.BUILD_TARGET }}.img
+            workspace/out/target/product/${{ github.event.inputs.DEVICE_NAME }}/*.zip
+            workspace/out/target/product/${{ github.event.inputs.DEVICE_NAME }}/*vendor*.img
+          name: ${{ github.event.inputs.DEVICE_NAME }}-${{ github.run_id }}
+          tag_name: ${{ github.run_id }}
+          body: |
+            Manifest: ${{ github.event.inputs.MANIFEST_BRANCH }}
+            Device: ${{ github.event.inputs.DEVICE_NAME }}
+            Target: ${{ github.event.inputs.BUILD_TARGET }}.img
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
