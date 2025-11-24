@@ -153,7 +153,7 @@ jobs:
     # --- START: Integrasi Telegram untuk Progress Bar ---
     # ------------------------------------------------------------------
 
-    - name: Notifikasi Telegram: Build Dimulai & Inisialisasi Progress Bar
+    - name: Notifikasi Telegram: Build Dimulai dan Inisialisasi Progress Bar
       id: start_notify
       run: |
         # Kirim pesan awal dan simpan ID pesan yang dikembalikan
@@ -169,7 +169,7 @@ jobs:
         <b>Progress:</b> Menghitung...
         ")
         
-        # Ekstrak message_id dari response JSON dan simpan sebagai output
+        # Ekstrak message_id
         MESSAGE_ID=$(echo "$RESPONSE" | python3 -c "import sys, json; print(json.load(sys.stdin)['result']['message_id'])")
         echo "telegram_message_id=$MESSAGE_ID" >> $GITHUB_OUTPUT
       env:
@@ -181,9 +181,13 @@ jobs:
       id: build_recovery
       timeout-minutes: 180
       run: |
-        # Ambil ID pesan dari langkah sebelumnya
+        # Inisialisasi variabel untuk Telegram
         MESSAGE_ID="${{ steps.start_notify.outputs.telegram_message_id }}"
-        
+        BOT_TOKEN="${{ secrets.TELEGRAM_BOT_TOKEN }}"
+        CHAT_ID="${{ secrets.TELEGRAM_CHAT_ID }}"
+        DEVICE="${{ github.event.inputs.DEVICE_NAME }}"
+        RUN_URL="${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+
         # -----------------------------------------------------
         # FUNGSI PEMBARUAN TELEGRAM
         # -----------------------------------------------------
@@ -191,30 +195,22 @@ jobs:
             local percentage=$1
             local status_text=$2
             local bar=""
-            local filled=$((percentage / 20)) # 5 blocks (20% per block)
+            local filled=$((percentage / 20))
 
-            # Generate Bar (Menggunakan karakter Unicode untuk progress bar)
             for i in {1..5}; do
-                if [ $i -le $filled ]; then
-                    bar="${bar}█" # Block penuh
-                else
-                    bar="${bar}░" # Block kosong
-                fi
+                if [ $i -le $filled ]; then bar="${bar}█"; else bar="${bar}░"; fi
             done
             
-            # Kirim Update
-            curl -s -X POST "https://api.telegram.org/bot$TELEGRAM_BOT_TOKEN/editMessageText" \
-                -d chat_id="$TELEGRAM_CHAT_ID" \
+            curl -s -X POST "https://api.telegram.org/bot$BOT_TOKEN/editMessageText" \
+                -d chat_id="$CHAT_ID" \
                 -d message_id="$MESSAGE_ID" \
                 -d parse_mode="HTML" \
                 -d text="
                 <b>TWRP Build Berjalan...</b>
-                
-                <b>Perangkat:</b> <code>${{ github.event.inputs.DEVICE_NAME }}</code>
+                <b>Perangkat:</b> <code>$DEVICE</code>
                 <b>Status:</b> ${status_text}
-                
                 <b>Progress:</b> ${bar} (${percentage}%)
-                <a href='${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}'>Lihat Log</a>
+                <a href='$RUN_URL'>Lihat Log</a>
                 "
         }
         
@@ -225,16 +221,13 @@ jobs:
         source build/envsetup.sh
         export ALLOW_MISSING_DEPENDENCIES=true
         
-        # Jalankan build di background dan simpan output ke log file
+        # Jalankan build di background
         lunch ${{ github.event.inputs.MAKEFILE_NAME }}-eng && make clean && make ${{ github.event.inputs.BUILD_TARGET }}image -j$(nproc --all) > build.log 2>&1 &
         BUILD_PID=$!
         
         # -----------------------------------------------------
         # LOOP PROGRESS MONITORING
         # -----------------------------------------------------
-        # Memberikan variabel env ke fungsi update_telegram secara eksplisit
-        TELEGRAM_BOT_TOKEN="${{ secrets.TELEGRAM_BOT_TOKEN }}"
-        TELEGRAM_CHAT_ID="${{ secrets.TELEGRAM_CHAT_ID }}"
         
         update_telegram 0 "Initializing Build Environment..."
         sleep 10
@@ -245,7 +238,6 @@ jobs:
             CURRENT_PERCENT=0
             STATUS="Compiling files..."
             
-            # Deteksi progress berdasarkan kata kunci umum di log AOSP/TWRP
             if grep -q "Copying device-specific ramdisk files" build.log; then CURRENT_PERCENT=20; STATUS="Copying ramdisk files..."; fi
             if grep -q "Copying vendor partition files" build.log; then CURRENT_PERCENT=40; STATUS="Copying vendor files..."; fi
             if grep -q "Building recovery image" build.log; then CURRENT_PERCENT=60; STATUS="Building recovery image..."; fi
@@ -256,13 +248,12 @@ jobs:
                 LAST_PERCENT=$CURRENT_PERCENT
             fi
             
-            sleep 60 # Update setiap 60 detik
+            sleep 60
         done
         
         # -----------------------------------------------------
         # CEK HASIL AKHIR
         # -----------------------------------------------------
-        # Tunggu proses background selesai dan ambil exit code-nya
         wait $BUILD_PID
         EXIT_CODE=$?
         
